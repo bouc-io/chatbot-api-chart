@@ -1,0 +1,94 @@
+# Base values for chatbot-api-chart
+# These values should never change between environments or over time
+
+replicaCount: 1
+
+image:
+  registry: ghcr.io/bouc-io
+  repository: application/chatbot/chatbot-api-server
+  tag: "1.0.1942105665"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+# Applied to the Deployment object (not the pod template). Reloader watches the
+# Secrets and ConfigMaps this workload references and triggers a rolling restart
+# when one changes, which is what makes DB password rotation take effect: a
+# secretKeyRef env var is resolved at pod start and never refreshed.
+# Inert if stakater/Reloader is not installed in the cluster.
+deploymentAnnotations:
+  reloader.stakater.com/auto: "true"
+
+podAnnotations:
+  # Scraped by Prometheus for app-level metrics at /metrics. Port matches the container.
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "3000"
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+volumes: []
+volumeMounts: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Default environment variables (can be overridden per environment)
+environment:
+  LOG_LEVEL: "info"
+  PORT: 3000
+  # OpenTelemetry — OTEL_EXPORTER_OTLP_ENDPOINT is built from the node IP in the
+  # deployment template. service.name surfaces in Jaeger/Grafana.
+  OTEL_SERVICE_NAME: "chatbot-api-server"
+  # Overridden from the cluster-vars ConfigMap via the HelmRelease (Flux postBuild).
+  ENVIRONMENT_ID: "unknown"
+  DISTILLATION_ENABLED: "false"
+  DISTILLATION_SERVICE_URL: ""
+  DISTILLATION_TIMEOUT_MS: "120000"
+  DISTILLATION_MIN_MESSAGES: "10"
+  DISTILLATION_MIN_INTERVAL_MS: "900000"
+  DISTILLATION_MAX_MESSAGES: "50"
+  ALLOW_SELF_SIGNED_CERTS: "false"
+  OLLAMA_BASE_URL: "http://ollama-chart.default.svc.cluster.local:11434"
+  OLLAMA_MODEL: "qwen3.5:2b"
+  MAX_HISTORY_MESSAGES: "20"
+  OLLAMA_SYSTEM_PROMPT: "You are a helpful assistant. When you think before answering: pick one approach immediately, state it in 1-3 short bullets, then stop. Never revisit or rephrase the same point twice. Never list alternatives. Go straight to the answer."
+  OLLAMA_THINK: "true"
+  # Instruction services (GAP 4)
+  ADMIN_API_URL: ""
+  PORTAL_API_URL: ""
+  # Memory retrieval
+  MEMORY_SERVICE_URL: ""
+  MEMORY_SERVICE_ENABLED: "false"
+  MEMORY_SEARCH_LIMIT: "10"
+
+# Ensure bundled PostgreSQL subchart pulls from the Bitnami legacy registry
+postgresql:
+  global:
+    ## Security parameters
+    ##
+    security:
+      allowInsecureImages: true # Required now since we move to Bitnami Legacy for now.
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: 17.5.0-debian-12-r18
